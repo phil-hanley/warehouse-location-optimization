@@ -28,11 +28,59 @@ The dashboard combines four Excel-based reports which are stored in SharePoint a
 | --- | --- |
 | **Article & Stock Data** | Provides article information, sales method, available stock, and primary sales location |
 | **Storage Location Data** | Provides every sales and racking location in the store along with what is stored there |
-| **Elevated Racking Reference Data** | Classifies warehouse racking locations by their location (Full Serve or Self Serve) |
+| **Elevated Racking Reference Data** | Classifies warehouse racking locations by their location type (Full Serve or Self Serve) |
 | **Sales Transaction Data** | Provides historical sales transactions used to calculate article sales history |
 
 ## Data Transformation
 
-Before modeling any data, I needed to be sure that the ingested data is standardized and has consistent formatting.
+Before modeling any data, I needed to be sure that the ingested data is standardized and has consistent formatting. The four reports I am pulling from were not ready to function in a relational mode. Power Query was used to clean, standardize, and reduce source data before creating relationships between the tables.
 
-One of the first things I noticed is that some of our article numbers (our unique 8-digit article idenfitiers) were missing leading zeros. 
+One of the first things I noticed is that some of our **SGF Locations** (our unique 6-digit elevated warehouse racking locations) were missing leading zeros. To correct this, I created custom columns in Power Query to standardize identifiers that were missing leading zeros. 
+
+Here is an example of a custom column in one report that standardizes the SGF locaton:
+
+```powerquery
+= Table.AddColumn(
+    #"Filtered Rows1",
+    "SGFLOCATION_fixed",
+    each Text.PadStart(Text.From([SGFLOCATION]), 6, "0")
+)
+```
+
+I used the `Text.PadStart` function to ensure that every SGF location contains six characters. This function adds leading zeros to any SGF location that is not 6 characters until the required length is reached, ensuring consistent formatting across all source tables. This same standardization was repeated for article numbers, which are 8-digit unique identifiers for our products. 
+
+
+| Identifier     | Standardized length | Purpose                                  |
+| -------------- | ------------------: | ---------------------------------------- |
+| SGF Location   |        6 characters | Match warehouse locations across reports |
+| Article Number |        8 characters | Match articles across reports            |
+
+After this standardization process, I removed columns that were not needed for the analysis and assigned appropriate data types where necessary. This reduced unnecessary data and further ensured consistent formatting.
+
+## Data Modeling
+
+Now that the data is cleaned, standardized, and ready to work with, I created relationships between each table. Below is the model view of the Power BI that displays the relationships of each table:
+
+<img width="1383" height="1137" alt="FS in SS model view" src="https://github.com/user-attachments/assets/3539b76d-03c2-4df1-8e7f-11faa587b37c" />
+
+Below is a table to describe the relationships:
+
+| One Side                    | Relationship Key    | Many Side                  | Cardinality       |
+| --------------------------- | ------------------- | -------------------------- | ----------------- |
+| **Article & Stock Data**    | `ArticleNo_fixed`   | **Storage Location Data**  | One-to-Many (1:*) |
+| **Location Reference Data** | `SGFLOCATION_fixed` | **Storage Location Data**  | One-to-Many (1:*) |
+| **Article & Stock Data**    | `ArticleNo_fixed`   | **Sales Transaction Data** | One-to-Many (1:*) |
+
+The first relationship connects **Article & Stock Data** to **Storage Location Data** using `ArticleNo_fixed`. **Article & Stock Data** occupies the one side because each article is only shown once, while **Storage Location Data** occupies the many side because a single article can be stored in multiple storage/racking locations.
+
+**Location Reference Data** connects to **Storage Location Data** using `SGFLOCATION_fixed`. Each warehouse storage location in only listed once in the reference table; however, those storage locations can appear more than once in the **Storage Location Data** if more than one article is stored in one storage/racking loation.
+
+Finally, **Article & Stock Data** connects to **sales Transaction Data** using `ArticleNo_fixed`. Each article is only listed once in **Article & Stock Data**, while that same article could appear under multiple transactions in **Sales Transaction Data**.
+
+The **Article Summary** table is intentionally disconnected from the other tables in the model. This is because it is a calculated table that uses DAX measures to retrieve information from the underlying tables. I'll break this down further in the next portion.
+
+## DAX Analytical Layer
+
+
+
+
