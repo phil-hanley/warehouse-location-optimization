@@ -81,6 +81,26 @@ The **Article Summary** table is intentionally disconnected from the other table
 
 ## DAX Analytical Layer
 
+After the source data was cleaned and relationships were established in the data model, I used DAX to create calculated columns, a calculated summary table, and measures that identify misplaced inventory and provide additional information that our team can usee to prioritize relocation decisions.
+
+The first step was to make sure that each individual racking storage location is classified based on the sales method (**SM**) of the article that is stored there as well as the type of storage location (**Full Serve warehouse** and **Self Serve warehouse** storage locations.
+
+The following calculated column uses `RELATED()` to retrieve the article's **sales method**, or **SM** from the **Article & Stock Data** table and the location classification from the **Location Reference Data** table.
+
+(For reference, **SM1** represents **Self Serve** and **SM2** represents **Full Serve**)
+
+```dax
+SM2_LocationType = 
+VAR ArticleSM = RELATED('Article & Stock Data'[SALESMETHOD])
+VAR LocationSM = RELATED('Location Reference Data'[SM code per SGF location])
+RETURN
+SWITCH(
+    TRUE(),
+    ArticleSM = 2 && LocationSM = 1, "SM1",
+    ArticleSM = 2 && LocationSM = 2, "FS",
+    BLANK()
+)
+```
 
 
 
