@@ -11,6 +11,8 @@ These **after-hours picks** can delay order fulfillment and create additional wo
 ## Solution
 Because there is no reporting that directly indicates these misplaced pallets, I created a Power BI dashboard that identifies these pallets along with additional key information, such as total Full Serve quantity, registered racking locations, and sales history to support relocation decisions.
 
+<img width="824" height="731" alt="image" src="https://github.com/user-attachments/assets/8738a85a-ada5-401b-adaa-4d64e7881087" />
+
 While there was previously an Excel tool that served the same purpose, that tool required manually copying and pasting data from multiple reports and was prone to breaking. This Power BI is set up to refresh every day at 6:30 AM and is connected to reporting that also refreshes every day. This eliminates the manual data preparation required by the Excel tool.
 
 Coworkers and leadership are now able to simply access the Power BI dashboard, and make educated decisions on what products to bring back to the Full Serve racking.
@@ -33,11 +35,11 @@ The dashboard combines four Excel-based reports which are stored in SharePoint a
 
 ## Data Transformation
 
-Before modeling any data, I needed to be sure that the ingested data is standardized and has consistent formatting. The four reports I am pulling from were not ready to function in a relational mode. Power Query was used to clean, standardize, and reduce source data before creating relationships between the tables.
+Before modeling any data, I needed to be sure that the ingested data was standardized and formatted consistently. The four reports I am pulling from were not ready to function in a relational model. Power Query was used to clean, standardize, and reduce source data before creating relationships between the tables.
 
 One of the first things I noticed is that some of our **SGF Locations** (our unique 6-digit elevated warehouse racking locations) were missing leading zeros. To correct this, I created custom columns in Power Query to standardize identifiers that were missing leading zeros. 
 
-Here is an example of a custom column in one report that standardizes the SGF locaton:
+Here is an example of a custom column in one report that standardizes the SGF location:
 
 ```powerquery
 = Table.AddColumn(
@@ -73,19 +75,19 @@ Below is a table to describe the relationships:
 
 The first relationship connects **Article & Stock Data** to **Storage Location Data** using `ArticleNo_fixed`. **Article & Stock Data** occupies the one side because each article is only shown once, while **Storage Location Data** occupies the many side because a single article can be stored in multiple storage/racking locations.
 
-**Location Reference Data** connects to **Storage Location Data** using `SGFLOCATION_fixed`. Each warehouse storage location in only listed once in the reference table; however, those storage locations can appear more than once in the **Storage Location Data** if more than one article is stored in one storage/racking loation.
+**Location Reference Data** connects to **Storage Location Data** using `SGFLOCATION_fixed`. Each warehouse storage location is only listed once in the reference table; however, those storage locations can appear more than once in the **Storage Location Data** if more than one article is stored in one storage/racking location.
 
-Finally, **Article & Stock Data** connects to **sales Transaction Data** using `ArticleNo_fixed`. Each article is only listed once in **Article & Stock Data**, while that same article could appear under multiple transactions in **Sales Transaction Data**.
+Finally, **Article & Stock Data** connects to **Sales Transaction Data** using `ArticleNo_fixed`. Each article is only listed once in **Article & Stock Data**, while that same article could appear under multiple transactions in **Sales Transaction Data**.
 
 The **Article Summary** table is intentionally disconnected from the other tables in the model. This is because it is a calculated table that uses DAX measures to retrieve information from the underlying tables. I'll break this down further in the next portion.
 
 ## DAX Analytical Layer
 
-After the source data was cleaned and relationships were established in the data model, I used DAX to create calculated columns, a calculated summary table, and measures that identify misplaced inventory and provide additional information that our team can usee to prioritize relocation decisions.
+After the source data was cleaned and relationships were established in the data model, I used DAX to create calculated columns, a calculated summary table, and measures that identify misplaced inventory and provide additional information that our team can use to prioritize relocation decisions.
 
 ## 1. Classifying storage locations
 
-The first step was to make sure that each individual racking storage location is classified based on the sales method (**SM**) of the article that is stored there as well as the type of storage location (**Full Serve warehouse** and **Self Serve warehouse** storage locations.
+The first step was to classify each individual racking location based on both the sales method of the article stored there and the sales method classification of the location itself.
 
 The following calculated column uses `RELATED()` to retrieve the article's **sales method**, or **SM** from the **Article & Stock Data** table and the location classification from the **Location Reference Data** table.
 
@@ -123,7 +125,7 @@ Now, measures will be evaluated against each article in the summary table and ca
 
 ## 3. Retrieving article attributes
 
-The following two measures are then built unto the Article Summary calculated table to retrieve the **Sales Method** and the **Primary Location (SLID)** of each article. This will tell us whether the article lives in **SM1** or in **SM2**, and then where the article lives on the sales floor if it is not a **PALLET** article.
+The following two measures are then built into the Article Summary calculated table to retrieve the **Sales Method** and the **Primary Location (SLID)** of each article. This will tell us whether the article lives in **SM1** or in **SM2**, and then where the article lives on the sales floor if it is not a **PALLET** article.
 
 ```DAX
 SM = 
@@ -152,7 +154,7 @@ CALCULATE(
     )
 )
 ```
-Several measures here use the same `CurrentArticle` pattern. `SELECTEDVALUE()` locks in the article that is being evaluated one at a time from the Article Summary table, and `CALCULATE()` and `FILTER()` retrieves the corresponding value from the underlying source data. In this case, the **Sales Method** and the **Primary Location (SLID)**.
+Several measures here use the same `CurrentArticle` pattern. `SELECTEDVALUE()` retrieves the article that is being evaluated one at a time from the `Article Summary` table, while `CALCULATE()` and `FILTER()` use that article to retrieve its corresponding values from the underlying source data. In this case, the **Sales Method** and the **Primary Location (SLID)**.
 
 ## 4. Identifying misplaced articles
 
@@ -167,7 +169,7 @@ VAR LocationSM = RELATED('Location Reference Data'[SM code per SGF location])
 RETURN
 IF(ArticleSM = 2 && LocationSM = 1, 1, 0)
 ```
-This measure evaluates each row of the **Storage Location Data** table and looks for any **SM2** articles that are stored in **SM1** locations. If this is the case, the measure returns 1, and if not, it returns 0.
+This column evaluates each row of the **Storage Location Data** table and looks for any **SM2** articles that are stored in **SM1** locations. If this is the case, the measure returns 1, and if not, it returns 0.
 
 Then, we create a measure in our Article Summary calculated table:
 
@@ -189,7 +191,7 @@ IF(
     0
 )
 ```
-This pulls every article number that the first measure has identified as misplaced in the **Storage Location Data** table. In the dashboard, this measure is used as a filter to only see articles that have returned **1**.
+This checks every article number with at least one storage location row where `IsMisplaced = 1`.
 
 ## 5. Combining multiple locations into one field
 
@@ -267,7 +269,7 @@ COALESCE(AvailStock, 0) - COALESCE(SGFStock, 0) + COALESCE(FSQty, 0)
 
 This formula takes the total amount of stock in our store and subtracts the quantity stored in racking locations. It then adds back on the amount of that stock that is available in **SM2** racking locations.
 
-For example, if we have 10 total pieces of an article as available stock with 7 of those pieces stored in the racking, this initial calculation leaves 3 pieces of stock on the floor. But if 2 of those racked pieces are stored in Full Serve (**SM2**) racking, that means those 2 pieces are added back, giving us 5 total pieces available on the floor.
+For example, if we have 10 total pieces of an article as available stock with 7 of those pieces stored in the racking, this initial calculation leaves 3 pieces of stock on the floor. But if 2 of those racked pieces are stored in Full Serve (**SM2**) racking, that means those 2 pieces are added back, giving us 5 total pieces available in SM2.
 
 **10 - 7  + 2 = 5**
 
