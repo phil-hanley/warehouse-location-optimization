@@ -293,7 +293,6 @@ This project shows the use of Power BI to transform several operational reports 
 - Custom columns
 - Identifier standardization with `Text.PadStart()`
 - Data type management
-- Column reduction
 
 **Data Modeling**
 - One-to-many relationships
