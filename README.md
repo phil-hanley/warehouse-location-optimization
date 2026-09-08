@@ -273,5 +273,49 @@ For example, if we have 10 total pieces of an article as available stock with 7 
 
 **10 - 7  + 2 = 5**
 
+## Using the Dashboard
 
+<img width="824" height="731" alt="image" src="https://github.com/user-attachments/assets/8738a85a-ada5-401b-adaa-4d64e7881087" />
 
+The final dashboard, as shown at the beginning, brings all of these calculations together into a single view of misplaced articles. For each article, coworkers can see its primary sales location, the total quantity available in Full Serve, and registered racking locations.
+
+Not every misplaced article requires immediate action. As shown in the dashboard, I have sorted the `QTY in FS` column in ascending order. This brings all articles that have **0 stock in Full Serve** to the top of the list, showing us the most urgent candidates for relocation before the store opens. 
+
+While this dashboard also includes sales history and forecasting for each article, this portion was redacted for data privacy reasons. The additional sales data provides even more context when making relocation decisions, allowing us to consider both **availability and expected demand** when deciding which pallets should be moved.
+
+## Skills Demonstrated
+
+This project shows the use of Power BI to transform several operational reports into an automated inventory analysis tool
+
+**Power Query**
+- SharePoint folder data ingestion
+- Data cleaning and transformation
+- Custom columns
+- Identifier standardization with `Text.PadStart()`
+- Data type management
+- Column reduction
+
+**Data Modeling**
+- One-to-many relationships
+- Article and location-based relationship keys
+- Calculated summary table
+- Relational data modeling
+
+**DAX**
+- Calculated columns
+- Measures
+- Variables (`VAR`)
+- `RELATED()`
+- `SUMMARIZE()`
+- `SELECTEDVALUE()`
+- `CALCULATE()`
+- `FILTER()`
+- `ALL()`
+- `IF()` and `SWITCH()`
+- `COUNTROWS()`
+- `DISTINCT()`
+- `SELECTCOLUMNS()`
+- `CONCATENATEX()`
+- `ISBLANK()` / `BLANK()`
+- `COALESCE()`
+- Aggregations including `SUM()`, `MIN()`, and `MAX()`
