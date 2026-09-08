@@ -226,7 +226,7 @@ IF(
 
 ## 6. Calculating total quantity currently in Full Serve
 
-Often because of space constraints, we are forced to store some **SM2** article in **SM1** locations. This is not an issue if these articles have sales locations on the floor that are consistently restocked. So while it is important for us to see all misplaced articles, it is crucial that we identify any **SM2** articles that have little or no stock in **SM1**. This last measure displays the total quantity of each misplaced article that is available in Full Serve
+Often because of space constraints, we are forced to store some **SM2** article in **SM1** locations. This is not an issue if these articles have sales locations on the floor that are consistently restocked. So while it is important for us to see all misplaced articles, it is crucial that we identify any **SM2** articles that have little or no stock accessible in **SM2**. This last measure displays the total quantity of each misplaced article that is available in Full Serve:
 
 ```DAX
 QTY in FS = 
@@ -265,7 +265,11 @@ RETURN
 COALESCE(AvailStock, 0) - COALESCE(SGFStock, 0) + COALESCE(FSQty, 0)
 ```
 
+This formula takes the total amount of stock in our store and subtracts the quantity stored in racking locations. It then adds back on the amount of that stock that is available in **SM2** racking locations.
 
+For example, if we have 10 total pieces of an article as available stock with 7 of those pieces stored in the racking, this initial calculation leaves 3 pieces of stock on the floor. But if 2 of those racked pieces are stored in Full Serve (**SM2**) racking, that means those 2 pieces are added back, giving us 5 total pieces available on the floor.
+
+**10 - 7  + 2 = 5**
 
 
 
