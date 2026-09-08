@@ -83,6 +83,8 @@ The **Article Summary** table is intentionally disconnected from the other table
 
 After the source data was cleaned and relationships were established in the data model, I used DAX to create calculated columns, a calculated summary table, and measures that identify misplaced inventory and provide additional information that our team can usee to prioritize relocation decisions.
 
+## 1. Classifying storage locations
+
 The first step was to make sure that each individual racking storage location is classified based on the sales method (**SM**) of the article that is stored there as well as the type of storage location (**Full Serve warehouse** and **Self Serve warehouse** storage locations.
 
 The following calculated column uses `RELATED()` to retrieve the article's **sales method**, or **SM** from the **Article & Stock Data** table and the location classification from the **Location Reference Data** table.
@@ -101,6 +103,169 @@ SWITCH(
     BLANK()
 )
 ```
+
+So, if an **SM2** article is stored in an **SM1** location, the row is classified as SM1. If an **SM2** article is stored in an **SM2** location, it is classified as `FS`. Any other combination is ignored. This helps the model differentiate between misplaced inventory and correctly stored inventory.
+
+## 2. Creating the Article Summary table
+
+The source reports can contain multiple records for the same articles, but the final dashboard is designed to only display each article once. To avoid data complications, I created a calculated `Article Summary` table using `SUMMARIZE()` to ensure there is one row per article number and corresponding article name.
+
+```dax
+Article Summary = 
+SUMMARIZE(
+    Article & Stock Data,
+    Article & Stock Data[ArticleNo_fixed],
+    Article & Stock Data[ARTNAME_UNICODE]
+)
+```
+
+Now, measures will be evaluated against each article in the summary table and can retrieve information on them from the other source tables.
+
+## 3. Retrieving article attributes
+
+The following two measures are then built unto the Article Summary calculated table to retrieve the **Sales Method** and the **Primary Location (SLID)** of each article. This will tell us whether the article lives in **SM1** or in **SM2**, and then where the article lives on the sales floor if it is not a **PALLET** article.
+
+```DAX
+SM = 
+VAR CurrentArticle =
+    SELECTEDVALUE('Article Summary'[ArticleNo_fixed])
+RETURN
+CALCULATE(
+    MAX(Article & Stock Data[SALESMETHOD]),
+    FILTER(
+        ALL(Article & Stock Data),
+        Article & Stock Data[ArticleNo_fixed] = CurrentArticle
+    )
+)
+```
+
+```DAX
+Primary Location = 
+VAR CurrentArticle =
+    SELECTEDVALUE('Article Summary'[ArticleNo_fixed])
+RETURN
+CALCULATE(
+    MIN(Article & Stock Data[H_SLID]),
+    FILTER(
+        ALL(Article & Stock Data),
+        Article & Stock Data[ArticleNo_fixed] = CurrentArticle
+    )
+)
+```
+Several measures here use the same `CurrentArticle` pattern. `SELECTEDVALUE()` locks in the article that is being evaluated one at a time from the Article Summary table, and `CALCULATE()` and `FILTER()` retrieves the corresponding value from the underlying source data. In this case, the **Sales Method** and the **Primary Location (SLID)**.
+
+## 4. Identifying misplaced articles
+
+Now we get to identify the problem that inspired this dashboard: **SM2** pallets in **SM1** elevated racking locations.
+
+First, we create a calculated column in our **Storage Location Data** table:
+
+```DAX
+IsMisplaced = 
+VAR ArticleSM = RELATED(Article & Stock Data[SALESMETHOD])
+VAR LocationSM = RELATED('Location Reference Data'[SM code per SGF location])
+RETURN
+IF(ArticleSM = 2 && LocationSM = 1, 1, 0)
+```
+This measure evaluates each row of the **Storage Location Data** table and looks for any **SM2** articles that are stored in **SM1** locations. If this is the case, the measure returns 1, and if not, it returns 0.
+
+Then, we create a measure in our Article Summary calculated table:
+
+```DAX
+Is Misplaced Article = 
+VAR CurrentArticle =
+    SELECTEDVALUE('Article Summary'[ArticleNo_fixed])
+RETURN
+IF(
+    CALCULATE(
+        COUNTROWS(Storage Location Data),
+        FILTER(
+            ALL(Storage Location Data),
+            Storage Location Data[ArticleNo_fixed] = CurrentArticle &&
+            Storage Location Data[IsMisplaced] = 1
+        )
+    ) > 0,
+    1,
+    0
+)
+```
+This pulls every article number that the first measure has identified as misplaced in the **Storage Location Data** table. In the dashboard, this measure is used as a filter to only see articles that have returned **1**.
+
+## 5. Combining multiple locations into one field
+
+Since one article can sometimes be stored in several storage locations, this next measure's function uses `CONCATENATEX()` to list every storage location of the given article and separate them with commas rather than displaying one row for every location.
+
+```DAX
+SGF Locations = 
+VAR CurrentArticle =
+    SELECTEDVALUE('Article Summary'[ArticleNo_fixed])
+VAR LocationTable =
+    DISTINCT(
+        SELECTCOLUMNS(
+            FILTER(
+                ALL(Storage Location Data),
+                Storage Location Data[ArticleNo_fixed] = CurrentArticle &&
+                NOT ISBLANK(Storage Location Data[SGF Location Display])
+            ),
+            "Loc", Storage Location Data[SGF Location Display]
+        )
+    )
+RETURN
+IF(
+    ISBLANK(CurrentArticle),
+    BLANK(),
+    CONCATENATEX(
+        LocationTable,
+        [Loc],
+        ", ",
+        [Loc],
+        ASC
+    )
+)
+```
+
+## 6. Calculating total quantity currently in Full Serve
+
+Often because of space constraints, we are forced to store some **SM2** article in **SM1** locations. This is not an issue if these articles have sales locations on the floor that are consistently restocked. So while it is important for us to see all misplaced articles, it is crucial that we identify any **SM2** articles that have little or no stock in **SM1**. This last measure displays the total quantity of each misplaced article that is available in Full Serve
+
+```DAX
+QTY in FS = 
+VAR CurrentArticle =
+    SELECTEDVALUE('Article Summary'[ArticleNo_fixed])
+
+VAR AvailStock =
+    CALCULATE(
+        MAX(Article & Stock Data[AVAIL_STOCK]),
+        FILTER(
+            ALL(Article & Stock Data),
+            Article & Stock Data[ArticleNo_fixed] = CurrentArticle
+        )
+    )
+
+VAR SGFStock =
+    CALCULATE(
+        MAX(Article & Stock Data[SGF_STOCK]),
+        FILTER(
+            ALL(Article & Stock Data),
+            Article & Stock Data[ArticleNo_fixed] = CurrentArticle
+        )
+    )
+
+VAR FSQty =
+    CALCULATE(
+        SUM(Storage Location Data[Qty]),
+        FILTER(
+            ALL(Storage Location Data),
+            Storage Location Data[ArticleNo_fixed] = CurrentArticle &&
+            Storage Location Data[SGF Location Display] = "FS"
+        )
+    )
+
+RETURN
+COALESCE(AvailStock, 0) - COALESCE(SGFStock, 0) + COALESCE(FSQty, 0)
+```
+
+
 
 
 
